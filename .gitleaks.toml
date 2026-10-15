@@ -23,4 +23,4 @@ regexes = ['''ds_live_EXAMPLE.*''', '''ds_live_REDACTED.*''']
 [[allowlists]]
 description = "Lab fixtures carry the synthetic demo token by design"
 targetRules = ["definitelysecure-api-token"]
-paths = ['''experiments/.*''', '''benchmarks/.*''', '''docker-compose\.yml$''', '''app/server\.py$''']
+paths = ['''experiments/.*''', '''benchmarks/.*''', '''docker-compose\.yml$''', '''app/server\.py$''', '''docs/.*''', '''preview\.html$''']

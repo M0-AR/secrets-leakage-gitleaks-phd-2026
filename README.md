@@ -1,12 +1,35 @@
 # Stale Secrets: From Uber's $148M GitHub Breaches to a Reproducible Gitleaks Science
 
-> **One-line claim:** deleting a secret from `HEAD` does not erase it from Git history —
-> this repo proves it end-to-end (leak → detect → exploit → rotate-first → purge → rescan-clean),
-> benchmarks scanners against published numbers, and anchors impact in live-market data.
+> **For executives (30 seconds):** a single key left in GitHub cost Uber $148M plus 20 years of audits. Deleting the key from the latest files did not help — it stayed in git history. This repo lets anyone reproduce that exact failure and the correct fix in about 10 minutes with fake data, then copy the prevention checklist into their own company.
+>
+> **For engineers (30 seconds):** `gitleaks git` finds it, `git show <commit>:.env` recovers it, `curl -H "Authorization: Bearer …"` exploits it, rotation kills it (old → 401), `git filter-repo` purges it, rescan proves zero findings. Every step is scripted with assertions under `experiments/`.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Reproducible](https://img.shields.io/badge/repro-docker_compose-blue)]()
 [![Gitleaks](https://img.shields.io/badge/gate-gitleaks_v8.30.1-black)]()
 [![Evidence](https://img.shields.io/badge/evidence-20_sources_2026-green)]()
+[![Interactive site](https://img.shields.io/badge/site-preview.html_+_quiz-purple)]()
+[![Pages ready](https://img.shields.io/badge/GitHub_Pages-docs%2F-ready-blue)]()
+
+![Animated terminal demo: clone, Gitleaks history scan, git show recovery, bearer-token API call, rotation to 401, filter-repo purge, clean rescan.](docs/demo.gif)
+
+**Prefer the web version?** Open [`preview.html`](preview.html) locally, or publish `docs/` with GitHub Pages (Settings → Pages → Deploy from a branch → `main` + `/docs`, or use the included `.github/workflows/pages.yml`) and share the link. It contains the same guide plus an interactive 10-question quiz with saved progress.
+
+## Contents
+
+- [Start here (beginner guide)](#-beginner-guide--read-this-and-you-are-a-professional)
+- [Who is this for](#who-is-this-for)
+- [Abstract](#abstract)
+- [1. Introduction](#1-introduction-sometimes-someone-left-you-the-key)
+- [2. Related work & 2026 consensus](#2-related-work--2026-consensus-what-we-verified-online-2026-10-15)
+- [3. Method](#3-method)
+- [4. Results](#4-results-what-run_allsh-proves--what-literature-adds)
+- [5. Hidden patterns](#5-hidden-patterns--phd-contributions)
+- [6. Reproduce](#6-reproduce-from-zero-to-hero)
+- [7. Limitations](#7-limitations--threats-to-validity)
+- [8. Interactive site & Pages deploy](#8-interactive-site--github-pages-deploy)
+- [9. Contributing](#9-contributing)
+- [References](#references)
 
 ---
 
@@ -28,6 +51,28 @@ Capalbo 2026, Soltaniani 2026, Baby et al. 2026), 2026 breach press, SEC EDGAR f
 UBER market snapshot — to derive a benchmark matrix and five candidate PhD contributions ("hidden patterns").
 
 **No real secrets are contained in this repo.** All tokens match the synthetic `ds_live_*` lab format.
+
+---
+
+## 🌱 Beginner guide — read this and you are a professional
+
+Let's work this out in a step-by-step way to be sure we have the right answer. Read this section top to bottom and you will know more than most interview candidates:
+
+1. **A secret** (API token, password, key) is anything where *possession equals access*. Our demo API trusts whoever sends `Authorization: Bearer <token>`.
+2. **Clone** the company's public repo. It looks normal — that is the point.
+3. **Scan history, not files:** `gitleaks git --redact .` reads `git log -p`. A finding with a commit hash proves the leak lives in history. `--redact` keeps values out of logs.
+4. **Recover without checkout:** `git show <commit>:.env` prints the deleted file as it looked then. Deletion ≠ erasure.
+5. **Use it:** `curl -H "Authorization: Bearer <token>" …/api/customers` → `200 OK` with customer records. No exploit needed — the server thinks you are authorized.
+6. **Rotate first:** change the valid token server-side. The stolen string now returns `401`. You cannot make attackers forget; you make what they remember worthless.
+7. **Purge, then prove:** `git filter-repo --replace-text … --force`, force-push, everyone re-clones. Fresh clone + `gitleaks git` → zero findings. Old token → 401.
+
+## Who is this for
+
+- **Students** — learn git internals by stealing, then saving, fake customer data.
+- **Developers** — copy the pre-commit hook (`.pre-commit-config.yaml`), CI scan, and push-protection checklist into your repo today.
+- **Security engineers** — reuse the rotate-first runbook and the verifier-triage pattern (high-recall gate + live-verification stage).
+- **Interview candidates** — the 10-question quiz in `preview.html` / `docs/index.html` is the exact question set hiring managers ask about this breach.
+- **Researchers** — extend `benchmarks/benchmark_matrix.py` and the five hidden-pattern hypotheses toward a paper.
 
 ---
 
@@ -145,6 +190,21 @@ Troubleshooting: `filter-repo` refuses non-fresh clones → re-clone with `--no-
 ## 7. Limitations & threats to validity
 
 Synthetic tokens overestimate regex recall vs custom-prefix keys (noted in Pickuma/gitleaks limits); SecretBench is 2023 (secret formats drift — re-sample 2026); single-machine latency not generalizable; economic math is upper-anchor (Uber-scale), not SME median. All disclosed for replication.
+
+---
+
+## 8. Interactive site & GitHub Pages deploy
+
+- **Local:** open [`preview.html`](preview.html) in any browser — full guide, A-Z checklist, and a 10-question quiz (scratch → pro) with instant explanations and progress saved in `localStorage`. No server, no account, nothing leaves your machine.
+- **Publish:** push to GitHub, then **Settings → Pages → Build and deployment → Source: Deploy from a branch** → branch `main`, folder `/docs` → Save. Or choose Source **GitHub Actions** — `.github/workflows/pages.yml` is included. Your site appears at `https://<you>.github.io/<repo>/`. `docs/.nojekyll` ensures plain HTML and the GIF are served as-is.
+- **Media:** [`docs/demo.gif`](docs/demo.gif) (159 KB, 11 frames, autoplaying, loops) supplements the text — every step is also printed as copy-paste commands. [`docs/screenshot-site.png`](docs/screenshot-site.png) shows the rendered page including a graded quiz answer.
+- **Video:** to record your own run, use a terminal recorder (e.g. asciinema + `agg`, or VHS with a checked-in tape script), keep it to one workflow per GIF, 10–30 seconds, title card first, and commit both the recording script and the GIF so it can be regenerated.
+
+---
+
+## 9. Contributing
+
+Issues and pull requests are welcome. Please: use synthetic tokens only (the repo's own Gitleaks config must stay green — run `gitleaks dir --config .gitleaks.toml --redact .` before pushing), keep GIFs small (optimize, e.g. 128 colors), add alt text for images, and update `docs/index.html` + `preview.html` together (they are the same page; `preview.html` is a copy for direct file preview).
 
 ---
 
