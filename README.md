@@ -13,7 +13,13 @@
 
 ![Animated terminal demo: clone, Gitleaks history scan, git show recovery, bearer-token API call, rotation to 401, filter-repo purge, clean rescan.](docs/demo.gif)
 
-**Prefer the web version?** Open [`preview.html`](preview.html) locally, or publish `docs/` with GitHub Pages (Settings → Pages → Deploy from a branch → `main` + `/docs`, or use the included `.github/workflows/pages.yml`) and share the link. It contains the same guide plus an interactive 10-question quiz with saved progress.
+**Prefer the web version?** Open [`preview.html`](preview.html) locally, or read it on the live site (after enabling Pages below — recommended source is `/docs`):
+
+- 🌐 Live site home: <https://m0-ar.github.io/secrets-leakage-gitleaks-phd-2026/>
+- 🌐 Live interactive page: <https://m0-ar.github.io/secrets-leakage-gitleaks-phd-2026/preview.html>
+- 🌐 Same page under root source: <https://m0-ar.github.io/secrets-leakage-gitleaks-phd-2026/docs/preview.html>
+
+Which link works depends on the Pages publishing source: source `/docs` serves `/` and `/preview.html`; source `/` (root) serves `/docs/preview.html`. This repo ships mirrors for both settings (root `index.html` redirect + root `preview.html` + `docs/preview.html` + `.nojekyll` in both folders), so enable either one — `/docs` is recommended. If a link 404s, check the Actions "pages build and deployment" run first, wait 1–2 minutes, then retry.
 
 ## Contents
 
@@ -196,7 +202,8 @@ Synthetic tokens overestimate regex recall vs custom-prefix keys (noted in Picku
 ## 8. Interactive site & GitHub Pages deploy
 
 - **Local:** open [`preview.html`](preview.html) in any browser — full guide, A-Z checklist, and a 10-question quiz (scratch → pro) with instant explanations and progress saved in `localStorage`. No server, no account, nothing leaves your machine.
-- **Publish:** push to GitHub, then **Settings → Pages → Build and deployment → Source: Deploy from a branch** → branch `main`, folder `/docs` → Save. Or choose Source **GitHub Actions** — `.github/workflows/pages.yml` is included. Your site appears at `https://<you>.github.io/<repo>/`. `docs/.nojekyll` ensures plain HTML and the GIF are served as-is.
+- **Publish:** push to GitHub, then **Settings → Pages → Build and deployment → Source: Deploy from a branch** → branch `main`, folder `/docs` (recommended) → Save. Or choose Source **GitHub Actions** — `.github/workflows/pages.yml` is included. Your site appears at `https://<you>.github.io/<repo>/`. `.nojekyll` files in both `/` and `/docs` ensure plain HTML and the GIF are served as-is.
+- **Why three links:** Pages serves URLs relative to the chosen source, so source `/docs` exposes `/` and `/preview.html`, while source `/` (root) exposes `/docs/preview.html`. The repo mirrors the page for both: root `index.html` (redirect with fallback links), root `preview.html` (asset paths rewritten to `docs/…`), and `docs/preview.html` (identical to `docs/index.html`). Any setting renders correctly in the browser.
 - **Media:** [`docs/demo.gif`](docs/demo.gif) (159 KB, 11 frames, autoplaying, loops) supplements the text — every step is also printed as copy-paste commands. [`docs/screenshot-site.png`](docs/screenshot-site.png) shows the rendered page including a graded quiz answer.
 - **Video:** to record your own run, use a terminal recorder (e.g. asciinema + `agg`, or VHS with a checked-in tape script), keep it to one workflow per GIF, 10–30 seconds, title card first, and commit both the recording script and the GIF so it can be regenerated.
 

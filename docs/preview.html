@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stale Secrets — From Uber's $148M Breaches to Reproducible Gitleaks Science</title>
+<meta name="description" content="Deleting a secret from HEAD does not erase it from Git history. Reproduce it end-to-end: leak, detect, exploit, rotate-first, purge, rescan-clean.">
+<style>
+:root{--bg:#0f1420;--card:#182034;--line:#2a3550;--txt:#e8edf7;--mut:#9aa7c2;--acc:#5cc8ff;--grn:#50fa7b;--yel:#f1fa8c;--red:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:var(--bg);color:var(--txt);line-height:1.6}
+.wrap{max-width:1020px;margin:0 auto;padding:24px 18px 80px}
+.hero{background:linear-gradient(135deg,#182a4d,#1d2f57 60%,#173a4a);border:1px solid var(--line);border-radius:16px;padding:28px}
+.hero h1{margin:.2em 0;font-size:clamp(26px,4vw,40px);line-height:1.15}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.badges span{border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:13px;background:#101828}
+.badges .mit{border-color:var(--grn)}.badges .g{border-color:var(--acc)}
+.grid{display:grid;grid-template-columns:1fr;gap:16px}@media(min-width:860px){.grid.two{grid-template-columns:1fr 1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+.card h2{margin-top:0;font-size:21px}.mut{color:var(--mut)}.small{font-size:13px}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+pre{background:#0b1120;border:1px solid var(--line);border-radius:10px;padding:12px;overflow:auto;font-size:13px}
+code.inl{background:#0b1120;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:.92em}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left}th{background:#101a30}
+a{color:var(--acc)}
+.btn{display:inline-block;background:var(--acc);color:#06283a;font-weight:700;border-radius:10px;padding:10px 16px;text-decoration:none;margin:4px 6px 4px 0}
+.btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
+.progress{height:10px;background:#0b1120;border:1px solid var(--line);border-radius:99px;overflow:hidden}
+.progress>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--grn))}
+.quiz-q{border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0;background:#101a30}
+.quiz-q h3{margin:.2em 0 8px;font-size:16px}
+.opt{display:block;width:100%;text-align:left;margin:6px 0;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0b1120;color:var(--txt);cursor:pointer}
+.opt:hover{border-color:var(--acc)}.opt.ok{border-color:var(--grn);background:#0e2a1a}.opt.bad{border-color:var(--red);background:#2a1215}
+.exp{font-size:13px;color:var(--mut);display:none;margin-top:8px}.exp.show{display:block}
+.check li{margin:8px 0;list-style:none}.check input{transform:scale(1.3);margin-right:10px}
+details{border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:10px 0;background:#101a30}
+summary{cursor:pointer;font-weight:700}
+footer{margin-top:32px;color:var(--mut);font-size:13px}
+img.demo{width:100%;border-radius:12px;border:1px solid var(--line)}
+.kbd{background:#0b1120;border:1px solid var(--line);border-bottom-width:3px;border-radius:6px;padding:1px 7px;font-size:.85em}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="hero">
+<div class="badges"><span class="mit">MIT</span><span class="g">docker compose reproducible</span><span>gitleaks v8.30.1</span><span>synthetic tokens only</span><span>interactive quiz inside</span></div>
+<h1>Stale Secrets: deleting a key from <code class="inl">HEAD</code> does not erase it from history</h1>
+<p><strong>Start here if you are new:</strong> in 2014 and again in 2016, attackers broke into Uber with <em>a valid key someone had left in GitHub</em> — no zero-day needed. This site turns that story into something you can <strong>run yourself in minutes</strong>: leak a fake key, find it with Gitleaks, recover it from history, use it against a demo API, then fix it the right way (rotate first, purge second) and prove the fix. Read this page top to bottom and you will know more than most interview candidates about secrets in git.</p>
+<p>
+<a class="btn" href="#begin">Start the beginner path</a>
+<a class="btn ghost" href="#quiz">Jump to the quiz</a>
+<a class="btn ghost" href="#lab">Run the lab</a>
+</p>
+<div class="progress" aria-label="reading progress"><i id="readbar"></i></div>
+<p class="small mut">Progress is saved in your browser (localStorage). Nothing leaves your machine.</p>
+</div>
+
+<div class="grid two" style="margin-top:16px">
+<div class="card">
+<h2>Watch: 25-second demo</h2>
+<img class="demo" src="demo.gif" alt="Animated terminal demo: clone a repo, run Gitleaks over history, recover .env with git show, call the API with a bearer token, rotate the token, purge history with git filter-repo, rescan clean.">
+<p class="small mut">GIF plays automatically and loops. It supplements — never replaces — the written steps below. If images do not load, every command is also printed as text you can copy.</p>
+</div>
+<div class="card">
+<h2>The one idea to remember</h2>
+<p>Git never forgets a commit you pushed. Deleting <code class="inl">.env</code> in a new commit only hides it from the <em>latest</em> files. The old commit — with the secret — stays reachable until history itself is rewritten <strong>and</strong> everyone re-clones. Attackers know this. Scanners like Gitleaks know this too: <code class="inl">gitleaks git</code> reads <code class="inl">git log -p</code>, not just the files you see today.</p>
+<p><strong>Therefore the fix has an order:</strong> <span class="kbd">1. revoke / rotate</span> → <span class="kbd">2. audit</span> → <span class="kbd">3. purge history</span> → <span class="kbd">4. prevent</span>. Purging without rotating is theater: someone already copied the key.</p>
+</div>
+</div>
+
+<div class="card" id="begin" style="margin-top:16px">
+<h2>🌱 Beginner guide — read this and you are a professional</h2>
+<p class="mut">Let us work this out in a step-by-step way to be sure we have the right answer. Seven tiny steps, each with a command you can run in the lab.</p>
+<details open><summary>Step 0 — What is a secret?</summary>
+<p>A secret is anything that proves who you are to a computer: an API token, a password, a private key. If it leaks, anyone holding the string <em>becomes you</em> as far as the server is concerned. That is why the demo API accepts a <code class="inl">Bearer</code> token: possession equals access.</p></details>
+<details><summary>Step 1 — Clone (start with nothing but a public repo)</summary>
+<pre>git clone &lt;company repo&gt; &amp;&amp; cd demo</pre>
+<p>You see a normal website repo. Nothing looks wrong — exactly the point.</p></details>
+<details><summary>Step 2 — Scan history, not just files</summary>
+<pre>gitleaks git --redact --verbose .</pre>
+<p><code class="inl">--redact</code> hides secret values from logs (otherwise the scan leaks the leak). A finding includes the <strong>commit hash</strong> — proof it came from history.</p></details>
+<details><summary>Step 3 — Recover without checking out</summary>
+<pre>git show &lt;commit&gt;:.env</pre>
+<p>Shows the file <em>as it looked then</em>. The current folder still has no <code class="inl">.env</code>. Deletion ≠ erasure.</p></details>
+<details><summary>Step 4 — Use it like the app would</summary>
+<pre>curl -H "Authorization: Bearer &lt;token&gt;" http://localhost:8042/api/customers</pre>
+<p><code class="inl">200 OK</code> with customer records. You did not exploit a bug — the server let you in as an authorized user.</p></details>
+<details><summary>Step 5 — Rotate first (kill the key's power)</summary>
+<p>Change the valid token on the server (<code class="inl">VALID_API_TOKEN</code>). The old token now returns <code class="inl">401</code> even though it is still written in history. You cannot make attackers forget — you make what they remember worthless.</p></details>
+<details><summary>Step 6 — Purge history, then prove it</summary>
+<pre>git filter-repo --replace-text passwords.txt --force
+git log --all -- .env        # path may remain; secret bytes must be gone
+gitleaks git --redact .      # expect: no leaks found</pre>
+<p>Force-push, teammates re-clone (never pull-then-push, or the secret returns). Re-clone and rescan as a new attacker: zero findings, old token 401.</p></details>
+</div>
+
+<div class="card" id="lab" style="margin-top:16px">
+<h2>Run it yourself (copy-paste)</h2>
+<pre>docker compose up --build -d
+docker compose exec lab bash
+/work/experiments/run_all.sh
+# step by step instead:
+./experiments/00_make_vulnerable_repo.sh
+./experiments/01_gitleaks_detect.sh /tmp/vuln_repos/definitelysecure-demo
+./experiments/02_git_show_history.sh /tmp/vuln_repos/definitelysecure-demo
+./experiments/03_api_auth_repro.sh ds_live_leaked_demo_token_2026_ROTATE_ME
+./experiments/04_rotate_and_clean.sh /tmp/vuln_repos/definitelysecure-demo OLD NEW
+./experiments/05_rescan_verify.sh /tmp/vuln_repos/definitelysecure-demo OLD
+python3 benchmarks/benchmark_matrix.py
+python3 benchmarks/live_market_verify.py --offline</pre>
+<p class="small mut">All tokens in this repo are synthetic (<code class="inl">ds_live_*</code> lab format). The study repo scans clean with its own config; only the throwaway demo repos under <code class="inl">/tmp</code> ever contain the lab token in a <code class="inl">.env</code>.</p>
+</div>
+
+<div class="grid two" style="margin-top:16px">
+<div class="card"><h2>Who is this for (user stories)</h2>
+<ul>
+<li><strong>Students:</strong> learn git internals the memorable way — by stealing and then saving fake customer data.</li>
+<li><strong>Developers:</strong> copy the pre-commit hook + CI scan + push-protection checklist into your own repo today.</li>
+<li><strong>Security engineers:</strong> reuse the rotate-first runbook and the verifier-economics triage pattern.</li>
+<li><strong>Interview candidates:</strong> the quiz below covers the exact questions hiring managers ask about this breach.</li>
+<li><strong>Researchers:</strong> extend the benchmark matrix and the five hidden-pattern hypotheses toward a paper.</li>
+</ul></div>
+<div class="card"><h2>Features at a glance</h2>
+<ul>
+<li>End-to-end A-Z scripts with assertions (leak → detect → exploit → rotate → purge → rescan).</li>
+<li>Dockerized attacker/defender topology (API + lab, pinned gitleaks 8.30.1).</li>
+<li>Benchmark matrix from published numbers (precision/recall, SecretBench scale, FTC economics).</li>
+<li>Live-market anchor script (UBER snapshot 2026-10-15 + SEC financials math).</li>
+<li>This interactive page: guide + checklist + quiz with saved progress.</li>
+</ul></div>
+</div>
+
+<div class="card" style="margin-top:16px">
+<h2>A-Z checklist (tick as you go)</h2>
+<ul class="check" id="checklist">
+<li><label><input type="checkbox" data-k="c0"> Built the vulnerable repo (00)</label></li>
+<li><label><input type="checkbox" data-k="c1"> Gitleaks found the history leak (01)</label></li>
+<li><label><input type="checkbox" data-k="c2"> Recovered .env with git show (02)</label></li>
+<li><label><input type="checkbox" data-k="c3"> Bearer token returned 200 (03)</label></li>
+<li><label><input type="checkbox" data-k="c4"> Rotated: old token is 401 (04)</label></li>
+<li><label><input type="checkbox" data-k="c5"> Purged + fresh rescan is clean (05)</label></li>
+</ul>
+<p class="small mut">Checklist state is stored locally in your browser.</p>
+</div>
+
+<div class="card" id="quiz" style="margin-top:16px">
+<h2>Interactive quiz — from scratch to pro (10 questions)</h2>
+<p class="mut">Pick an answer; you get instant feedback plus the reason. Score ≥ 8/10 = pro. Progress saves locally.</p>
+<div id="quizbox"></div>
+<p><strong>Score: <span id="score">0</span>/10</strong> <span id="level" class="mut"></span></p>
+<p><button class="btn ghost" id="resetq">Reset quiz</button></p>
+</div>
+
+<div class="card" style="margin-top:16px">
+<h2>Numbers worth remembering</h2>
+<table>
+<tr><th>Fact</th><th>Value</th></tr>
+<tr><td>2014 breach (public-repo key)</td><td>&gt;100,000 driver records</td></tr>
+<tr><td>2016 breach (private-repo key)</td><td>57M rider/driver records</td></tr>
+<tr><td>Cover-up payment / disclosure delay</td><td>$100,000 · &gt;1 year</td></tr>
+<tr><td>Settlement / oversight</td><td>$148M · 20-year FTC order</td></tr>
+<tr><td>Gitleaks recall / precision (published)</td><td>88% / 46% — fast gate, needs verifier stage</td></tr>
+<tr><td>SecretBench scale</td><td>97,479 secrets (15,084 true), 818 repos, 49 languages</td></tr>
+<tr><td>Market anchor (2026-10-15)</td><td>UBER $69.69 · fine ≈ 0.28% of 2025 revenue</td></tr>
+</table>
+<p class="small mut">Full citations live in <code class="inl">paper/REFERENCES.bib</code> in the repo.</p>
+</div>
+
+<div class="card" style="margin-top:16px">
+<h2>Put this page on the web (GitHub Pages, 2026 flow)</h2>
+<ol>
+<li>Push this repo to GitHub. This page is <code class="inl">docs/index.html</code> (also copied as <code class="inl">preview.html</code>).</li>
+<li>On GitHub: <strong>Settings → Pages → Build and deployment → Source: Deploy from a branch</strong>, branch <code class="inl">main</code>, folder <code class="inl">/docs</code>, Save. (Alternative: Source <strong>GitHub Actions</strong> with the included <code class="inl">.github/workflows/pages.yml</code>.)</li>
+<li>Wait for the Pages workflow run, then open <code class="inl">https://&lt;you&gt;.github.io/&lt;repo&gt;/</code>. A <code class="inl">.nojekyll</code> file is included so plain HTML (including the GIF) is served as-is.</li>
+</ol>
+</div>
+
+<footer>MIT · synthetic demo data only ·prove every claim by running the lab.</footer>
+</div>
+
+<script>
+var QS=[
+{q:"You delete .env in a new commit and push. Where is the secret now?",o:["Gone everywhere — the new commit erased it","Still in the old commit, reachable via history","Only on your laptop"],a:1,e:"Git keeps every commit. The new commit hides .env from HEAD, but git show <old>:.env and gitleaks git still find it."},
+{q:"Which command scans the full commit history?",o:["gitleaks dir .","gitleaks git .","git status"],a:1,e:"gitleaks git walks git log -p patches. dir only scans current files — the classic miss."},
+{q:"How do you view a deleted file without checking out the old commit?",o:["git show <commit>:<path>","rm -rf .git","git push --force"],a:0,e:"git show <sha>:.env prints the file as it looked then. No checkout needed."},
+{q:"How does the demo API authenticate?",o:["Username + password form","Authorization: Bearer <token> header","No auth at all"],a:1,e:"Exactly like real apps: possession of the token equals access. That is why a leaked string is a break-in."},
+{q:"A secret reached a pushed commit. What is step one?",o:["Rewrite history immediately","Revoke / rotate the credential first","Delete the repo"],a:1,e:"Rotation kills the key's power even if copies exist. Purging without rotating is theater."},
+{q:"Which tool rewrites history to purge the secret bytes?",o:["git filter-repo (or BFG)","git pull","prettier"],a:0,e:"filter-repo --replace-text removes the bytes from every commit; then force-push and everyone re-clones."},
+{q:"After a history rewrite, teammates should…",o:["git pull then push","Discard and re-clone (or documented rebase flow)","Do nothing"],a:1,e:"A pull+push cycle can resurrect the tainted history. Re-clone is the safe default."},
+{q:"Which layer cannot be skipped with --no-verify?",o:["Local pre-commit hook","Server-side push protection","README badge"],a:1,e:"Local hooks are bypassable by design; push protection rejects the push on the server."},
+{q:"Published recall of Gitleaks (Basak et al.)?",o:["88% (high recall, needs verifier stage)","12%","100% with zero false positives"],a:0,e:"High recall + mid precision (46%) is why teams pair it with a verifier like TruffleHog --only-verified."},
+{q:"The $148M settlement vs 2025 revenue (~$52B) is about…",o:["28%","2.8%","0.28% — the fine is rounding; the 20-year oversight is the deterrent"],a:2,e:"$148M / $52.017B ≈ 0.28%. Deterrence came from audits, reporting, and criminal exposure."}
+];
+var state={ans:{},score:0};
+try{state=JSON.parse(localStorage.getItem("ss_quiz")||'{"ans":{},"score":0}')}catch(e){}
+function save(){localStorage.setItem("ss_quiz",JSON.stringify(state))}
+function render(){
+var box=document.getElementById("quizbox");box.innerHTML="";var sc=0;
+QS.forEach(function(Q,i){
+var d=document.createElement("div");d.className="quiz-q";
+d.innerHTML="<h3>Q"+(i+1)+". "+Q.q+"</h3>";
+Q.o.forEach(function(t,j){
+var b=document.createElement("button");b.className="opt";b.textContent=t;
+var mine=state.ans[i];
+if(mine!==undefined){if(j===Q.a)b.classList.add("ok");if(mine===j&&j!==Q.a)b.classList.add("bad");b.disabled=true;}
+b.onclick=function(){state.ans[i]=j;save();render();var ex=document.getElementById("ex"+i);if(ex)ex.classList.add("show");};
+d.appendChild(b);
+});
+var ex=document.createElement("div");ex.className="exp"+(state.ans[i]!==undefined?" show":"");ex.id="ex"+i;
+ex.textContent=(state.ans[i]===Q.a?"Correct. ":"Not quite. ")+Q.e;d.appendChild(ex);
+box.appendChild(d);if(state.ans[i]===Q.a)sc++;
+});
+document.getElementById("score").textContent=sc;
+document.getElementById("level").textContent=sc>=8?"— pro level. You interview ready.":sc>=5?"— getting there; re-read steps 5–6.":"— start at Step 0 above.";
+var done=Object.keys(state.ans).length;
+document.getElementById("readbar").style.width=Math.round(done/QS.length*100)+"%";
+}
+document.getElementById("resetq").onclick=function(){state={ans:{},score:0};save();render()};
+var cl={};try{cl=JSON.parse(localStorage.getItem("ss_check")||"{}")}catch(e){}
+document.querySelectorAll("#checklist input").forEach(function(c){
+c.checked=!!cl[c.dataset.k];
+c.onchange=function(){cl[c.dataset.k]=c.checked;localStorage.setItem("ss_check",JSON.stringify(cl))};
+});
+render();
+</script>
+</body>
+</html>
