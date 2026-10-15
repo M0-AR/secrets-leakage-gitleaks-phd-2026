@@ -1,0 +1,24 @@
+# Reproducible attacker/defender lab image.
+# Pinned versions verified 2026-10-15 via gitleaks releases + OWASP DevSecOps guideline:
+# gitleaks v8.30.1, trufflehog latest, git-filter-repo (Debian packaged), python 3.12.
+FROM python:3.12-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    GITLEAKS_VERSION=8.30.1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git curl ca-certificates bash jq \
+      git-filter-repo \
+    && rm -rf /var/lib/apt/lists/* \
+    && arch=$(dpkg --print-architecture) \
+    && case "$arch" in amd64) garch="x64";; arm64) garch="arm64";; *) garch="x64";; esac \
+    && curl -fsSL --retry 3 -o /tmp/gitleaks.tar.gz \
+         "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${garch}.tar.gz" \
+    && tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks \
+    && chmod +x /usr/local/bin/gitleaks \
+    && rm /tmp/gitleaks.tar.gz \
+    && gitleaks version \
+    && git --version \
+    && pip install --no-cache-dir flask==3.1.0 requests==2.32.3
+
+WORKDIR /work

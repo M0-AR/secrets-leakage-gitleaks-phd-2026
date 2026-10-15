@@ -1,0 +1,38 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.lab
+    command: python3 /work/app/server.py
+    ports:
+      - "8042:8042"
+    environment:
+      - API_PORT=8042
+      # The VALID token is injected at runtime. Experiments start with the
+      # LEAKED token valid, then rotate to prove revocation-first remediation
+      # (GitHub docs + GitGuardian + OWASP guideline consensus).
+      - VALID_API_TOKEN=${VALID_API_TOKEN:-ds_live_leaked_demo_token_2026_ROTATE_ME}
+    volumes:
+      - ./app:/work/app
+      - ./experiments:/work/experiments
+      - ./benchmarks:/work/benchmarks
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8042/health',timeout=3).read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  lab:
+    build:
+      context: .
+      dockerfile: Dockerfile.lab
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - .:/work
+      - /work/vuln_repos
+    working_dir: /work
+    command: sleep infinity
+    environment:
+      - API_URL=http://api:8042

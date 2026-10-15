@@ -1,0 +1,26 @@
+# Org-level Gitleaks config. Extends default rules (100+ patterns, MIT) and adds the
+# study's synthetic DefinitelySecure token format so the lab is deterministic.
+# Verified against gitleaks/gitleaks config docs (useDefault + allowlists).
+[extend]
+useDefault = true
+
+[[rules]]
+id = "definitelysecure-api-token"
+description = "Synthetic DefinitelySecure demo API token (lab only)"
+regex = '''ds_live_[A-Za-z0-9_]{16,}'''
+tags = ["lab", "api-key", "definitelysecure"]
+
+[[allowlists]]
+description = "Ignore documented example tokens in markdown and this config"
+paths = ['''README\.md$''', '''paper/.*\.md$''', '''evidence/.*\.md$''', '''\.gitleaks\.toml$''']
+regexTarget = "match"
+regexes = ['''ds_live_EXAMPLE.*''', '''ds_live_REDACTED.*''']
+
+# Dogfooding: this study repo legitimately contains the SYNTHETIC lab token as a
+# string constant in experiment/benchmark fixtures (verified synthetic ds_live_*,
+# no real credential). Allowlist by path+rule so `gitleaks git --config .gitleaks.toml`
+# stays green on THIS repo, while synthetic vuln repos (with .env) still fire.
+[[allowlists]]
+description = "Lab fixtures carry the synthetic demo token by design"
+targetRules = ["definitelysecure-api-token"]
+paths = ['''experiments/.*''', '''benchmarks/.*''', '''docker-compose\.yml$''', '''app/server\.py$''']

@@ -1,0 +1,10 @@
+# Never commit real secrets. Verified pattern from GitHub remediation docs (2026):
+# .env committed once stays in history + clones + forks even after deletion.
+.env
+.env.*
+!.env.example
+gitleaks-report*.json
+findings*.json
+vuln_repos/
+__pycache__/
+*.pyc
